@@ -25,7 +25,7 @@ export default function AuthPages() {
     setError("");
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e) => { 
     e.preventDefault();
     // Form validation example
     if (!email || !password || (!isLogin && !name)) {
