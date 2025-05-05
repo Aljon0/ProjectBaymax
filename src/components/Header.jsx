@@ -1,5 +1,8 @@
+import SignOutAlert from "./SignOutAlert";
 import { Heart, Bell, Calendar, MessageSquare, AlertTriangle, User, LogOut, Menu, X } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
+import { useAuth } from "../contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 import NavButton from "./NavButton";
 import MobileNavButton from "./MobileNavButton";
 
@@ -7,6 +10,8 @@ export default function Header({ activeTab, handleTabChange }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef(null);
+  const { currentUser, logout } = useAuth();
+  const navigate = useNavigate();
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -32,10 +37,14 @@ export default function Header({ activeTab, handleTabChange }) {
     };
   }, []);
 
-  const handleLogout = () => {
-    // Add logout functionality here
-    console.log("Logging out...");
-    setIsProfileOpen(false);
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setIsProfileOpen(false);
+      navigate("/login");
+    } catch (error) {
+      console.error("Failed to log out", error);
+    }
   };
 
   return (
@@ -83,45 +92,47 @@ export default function Header({ activeTab, handleTabChange }) {
             />
 
             {/* User Profile Button */}
-            <div className="relative" ref={profileRef}>
-              <button 
-                onClick={toggleProfileMenu}
-                className="flex items-center gap-2 ml-6 bg-white text-red-500 py-2 px-4 rounded-full hover:bg-red-50 transition-colors"
-              >
-                <span className="font-medium">John Doe</span>
-                <div className="h-8 w-8 rounded-full bg-red-100 flex items-center justify-center">
-                  <User className="h-5 w-5 text-red-500" />
-                </div>
-              </button>
-
-              {/* Profile Dropdown */}
-              {isProfileOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-1 z-20">
-                  <div className="px-4 py-3 border-b border-gray-100">
-                    <p className="text-sm text-gray-500">Signed in as</p>
-                    <p className="text-sm font-medium text-gray-900">john.doe@example.com</p>
+            {currentUser && (
+              <div className="relative" ref={profileRef}>
+                <button 
+                  onClick={toggleProfileMenu}
+                  className="flex items-center gap-2 ml-6 bg-white text-red-500 py-2 px-4 rounded-full hover:bg-red-50 transition-colors"
+                >
+                  <span className="font-medium">
+                    {currentUser.displayName || "User"}
+                  </span>
+                  <div className="h-8 w-8 rounded-full bg-red-100 flex items-center justify-center">
+                    <User className="h-5 w-5 text-red-500" />
                   </div>
-                  <button 
-                    onClick={handleLogout}
-                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Sign out
-                  </button>
-                </div>
-              )}
-            </div>
+                </button>
+
+                {/* Profile Dropdown */}
+                {isProfileOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-1 z-20">
+                    <div className="px-4 py-3 border-b border-gray-100">
+                      <p className="text-sm text-gray-500">Signed in as</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {currentUser.email}
+                      </p>
+                    </div>
+                    <SignOutAlert />
+                  </div>
+                )}
+              </div>
+            )}
           </nav>
 
           {/* Mobile Menu and Profile Buttons */}
           <div className="md:hidden flex items-center gap-2">
             {/* Mobile Profile Button */}
-            <button 
-              onClick={toggleProfileMenu}
-              className="flex items-center justify-center h-9 w-9 rounded-full bg-white text-red-500"
-            >
-              <User className="h-5 w-5" />
-            </button>
+            {currentUser && (
+              <button 
+                onClick={toggleProfileMenu}
+                className="flex items-center justify-center h-9 w-9 rounded-full bg-white text-red-500"
+              >
+                <User className="h-5 w-5" />
+              </button>
+            )}
 
             {/* Mobile Menu Button */}
             <button className="flex items-center justify-center" onClick={toggleMobileMenu}>
@@ -132,19 +143,15 @@ export default function Header({ activeTab, handleTabChange }) {
       </header>
 
       {/* Mobile Profile Dropdown */}
-      {isProfileOpen && (
+      {isProfileOpen && currentUser && (
         <div className="md:hidden absolute top-16 right-2 mt-2 w-48 bg-white rounded-lg shadow-lg py-1 z-30">
           <div className="px-4 py-3 border-b border-gray-100">
-            <p className="text-sm font-medium text-gray-900">John Doe</p>
-            <p className="text-sm text-gray-500">john.doe@example.com</p>
+            <p className="text-sm font-medium text-gray-900">
+              {currentUser.displayName || "User"}
+            </p>
+            <p className="text-sm text-gray-500">{currentUser.email}</p>
           </div>
-          <button 
-            onClick={handleLogout}
-            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-          >
-            <LogOut className="mr-2 h-4 w-4" />
-            Sign out
-          </button>
+          <SignOutAlert />
         </div>
       )}
 
@@ -156,31 +163,46 @@ export default function Header({ activeTab, handleTabChange }) {
               icon={<Heart />}
               label="Symptom Checker"
               active={activeTab === "symptomChecker"}
-              onClick={() => handleTabChange("symptomChecker")}
+              onClick={() => {
+                handleTabChange("symptomChecker");
+                setIsMobileMenuOpen(false);
+              }}
             />
             <MobileNavButton
               icon={<Calendar />}
               label="Health Check-In"
               active={activeTab === "healthCheckIn"}
-              onClick={() => handleTabChange("healthCheckIn")}
+              onClick={() => {
+                handleTabChange("healthCheckIn");
+                setIsMobileMenuOpen(false);
+              }}
             />
             <MobileNavButton
               icon={<MessageSquare />}
               label="Journal"
               active={activeTab === "journal"}
-              onClick={() => handleTabChange("journal")}
+              onClick={() => {
+                handleTabChange("journal");
+                setIsMobileMenuOpen(false);
+              }}
             />
             <MobileNavButton
               icon={<Bell />}
               label="Health Tips"
               active={activeTab === "healthTips"}
-              onClick={() => handleTabChange("healthTips")}
+              onClick={() => {
+                handleTabChange("healthTips");
+                setIsMobileMenuOpen(false);
+              }}
             />
             <MobileNavButton
               icon={<AlertTriangle />}
               label="Emergency"
               active={activeTab === "emergency"}
-              onClick={() => handleTabChange("emergency")}
+              onClick={() => {
+                handleTabChange("emergency");
+                setIsMobileMenuOpen(false);
+              }}
             />
           </div>
         </div>
