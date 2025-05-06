@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { PlusCircle, Clock, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import { PlusCircle, Clock, Calendar, Trash2, AlertCircle } from "lucide-react";
 import { db } from "../firebase"; // Import your Firebase db
 import { 
   collection, 
@@ -9,16 +9,23 @@ import {
   addDoc, 
   serverTimestamp, 
   doc, 
-  updateDoc 
+  updateDoc,
+  deleteDoc
 } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
+import voiceline from "../assets/BaymaxVoice.wav";
 
 // Chat History Component with Firebase integration
-export default function ChatHistory({ onSelectChat, activeChat, currentMessages }) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+export default function ChatHistory({ onSelectChat, activeChat, currentMessages, isMobileView, setShowChatHistory }) {
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
   const auth = getAuth();
+
+  const playAudio = () => {
+    const audio = new Audio(voiceline);
+    audio.play();
+  };
 
   // Fetch chat history from Firestore when component mounts
   useEffect(() => {
@@ -120,7 +127,7 @@ export default function ChatHistory({ onSelectChat, activeChat, currentMessages 
         alert("Please sign in to create a new chat");
         return;
       }
-      
+      playAudio();
       // Initial message from Baymax
       const initialMessages = [{
         sender: "baymax",
@@ -152,10 +159,61 @@ export default function ChatHistory({ onSelectChat, activeChat, currentMessages 
       
       // Select the new chat
       onSelectChat(newChat);
+      
+      // On mobile, automatically hide chat history after selecting a new chat
+      if (isMobileView && setShowChatHistory) {
+        setShowChatHistory(false);
+      }
     } catch (error) {
       console.error("Error creating new chat:", error);
       alert("Failed to create new chat");
     }
+  };
+
+  const deleteChat = async (chatId, e) => {
+    // Prevent the click from propagating to the parent (which would select the chat)
+    e.stopPropagation();
+    
+    // If we're just initiating the deletion confirmation
+    if (deleteConfirm !== chatId) {
+      setDeleteConfirm(chatId);
+      return;
+    }
+    
+    try {
+      const userId = auth.currentUser?.uid;
+      
+      if (!userId) {
+        alert("Please sign in to delete a chat");
+        return;
+      }
+      
+      // Delete the chat document from Firestore
+      const chatRef = doc(db, "users", userId, "chats", chatId);
+      await deleteDoc(chatRef);
+      
+      // Update state
+      setChats(prevChats => prevChats.filter(chat => chat.id !== chatId));
+      
+      // If the deleted chat was active, select a new one or clear
+      if (activeChat && activeChat.id === chatId) {
+        // Select the first chat in the updated list, or null if list is empty
+        const firstChat = chats.filter(chat => chat.id !== chatId)[0];
+        onSelectChat(firstChat || null);
+      }
+      
+      // Reset delete confirmation
+      setDeleteConfirm(null);
+    } catch (error) {
+      console.error("Error deleting chat:", error);
+      alert("Failed to delete chat");
+    }
+  };
+
+  // Cancel delete confirmation
+  const cancelDelete = (e) => {
+    e.stopPropagation();
+    setDeleteConfirm(null);
   };
 
   const formatDate = (dateString) => {
@@ -163,55 +221,33 @@ export default function ChatHistory({ onSelectChat, activeChat, currentMessages 
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
+  const handleSelectChat = (chat) => {
+    onSelectChat(chat);
+    // Hide chat history on mobile after selecting a chat
+    if (isMobileView && setShowChatHistory) {
+      setShowChatHistory(false);
+    }
+  };
+
   return (
-    <div className={`bg-white rounded-xl shadow-md h-[calc(100vh-180px)] flex flex-col transition-all duration-300 ${isCollapsed ? 'w-14 overflow-hidden' : 'w-full'} relative`}>
-      {/* Header with title and toggle button side by side */}
-      <div className={`flex items-center ${isCollapsed ? 'justify-center p-4' : 'justify-between p-4'}`}>
-        <h2 className="text-xl font-bold text-red-500 flex items-center">
-          {isCollapsed ? (
-            <Clock className="w-6 h-6" />
-          ) : (
-            <span>Chat History</span>
-          )}
-        </h2>
-        
-        {/* Toggle collapse button - Next to the clock icon */}
-        {!isCollapsed && (
-          <button 
-            onClick={() => setIsCollapsed(true)}
-            className="bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-md"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-        )}
+    <div className="bg-white rounded-xl shadow-md h-[calc(100vh-180px)] flex flex-col w-full relative">
+      {/* Header with title */}
+      <div className="flex items-center justify-between p-4">
+        <h2 className="text-xl font-bold text-red-500">Chat History</h2>
       </div>
-      
-      {/* When collapsed, show the expand button below the clock icon */}
-      {isCollapsed && (
-        <button 
-          onClick={() => setIsCollapsed(false)}
-          className="bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-md mx-auto mt-2 mb-4"
-        >
-          <ChevronRight className="w-4 h-4" />
-        </button>
-      )}
       
       <button
         onClick={createNewChat}
-        className={`bg-red-500 hover:bg-red-600 text-white rounded-lg flex items-center justify-center transition-colors ${
-          isCollapsed ? 'p-2 mx-auto mb-4' : 'p-3 mx-4 mb-4'
-        }`}
+        className="bg-red-500 hover:bg-red-600 text-white rounded-lg flex items-center justify-center transition-colors p-3 mx-4 mb-4"
       >
-        <PlusCircle className={`${isCollapsed ? 'w-6 h-6' : 'w-5 h-5 mr-2'}`} />
-        {!isCollapsed && 'New Chat'}
+        <PlusCircle className="w-5 h-5 mr-2" />
+        New Chat
       </button>
       
-      {!isCollapsed && (
-        <div className="text-sm text-gray-500 font-medium mb-2 mx-4 flex items-center">
-          <Clock className="w-4 h-4 mr-1" />
-          Recent Consultations
-        </div>
-      )}
+      <div className="text-sm text-gray-500 font-medium mb-2 mx-4 flex items-center">
+        <Clock className="w-4 h-4 mr-1" />
+        Recent Consultations
+      </div>
       
       <div className="overflow-y-auto flex-grow px-2">
         {loading ? (
@@ -228,42 +264,61 @@ export default function ChatHistory({ onSelectChat, activeChat, currentMessages 
           chats.map((chat) => (
             <div
               key={chat.id}
-              onClick={() => onSelectChat(chat)}
-              className={`mb-2 rounded-lg cursor-pointer transition-colors ${
-                isCollapsed 
-                  ? 'p-2 text-center'
-                  : 'p-3'
-              } ${
+              onClick={() => handleSelectChat(chat)}
+              className={`mb-2 rounded-lg cursor-pointer transition-colors p-3 ${
                 activeChat && activeChat.id === chat.id
-                  ? isCollapsed 
-                    ? "bg-red-100 border-l-2 border-red-500" 
-                    : "bg-red-100 border-l-4 border-red-500"
+                  ? "bg-red-100 border-l-4 border-red-500"
                   : "hover:bg-gray-100"
-              }`}
-              title={isCollapsed ? chat.title : ''}
+              } relative group`}
             >
-              {isCollapsed ? (
-                <div className="flex flex-col items-center">
-                  <span className="w-8 h-8 bg-red-200 rounded-full flex items-center justify-center text-red-600 font-medium">
-                    {chat.title.charAt(0)}
-                  </span>
+              <div className="flex items-center justify-between mb-1 pr-8">
+                <h3 className="font-medium text-gray-800 truncate">{chat.title}</h3>
+                <span className="text-xs text-gray-500 flex items-center">
+                  <Calendar className="w-3 h-3 mr-1" />
+                  {formatDate(chat.date)}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 truncate">{chat.preview}</p>
+              
+              {/* Delete button with confirmation */}
+              {deleteConfirm === chat.id ? (
+                <div className="absolute top-1 right-1 flex items-center">
+                  <span className="text-xs mr-1 bg-red-50 text-red-600 p-1 rounded">Confirm?</span>
+                  <button 
+                    onClick={(e) => deleteChat(chat.id, e)}
+                    className="bg-red-500 hover:bg-red-600 text-white rounded p-1 mr-1"
+                    title="Confirm Delete"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                  <button 
+                    onClick={cancelDelete}
+                    className="bg-gray-300 hover:bg-gray-400 text-gray-700 rounded p-1"
+                    title="Cancel"
+                  >
+                    ✕
+                  </button>
                 </div>
               ) : (
-                <>
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="font-medium text-gray-800 truncate">{chat.title}</h3>
-                    <span className="text-xs text-gray-500 flex items-center">
-                      <Calendar className="w-3 h-3 mr-1" />
-                      {formatDate(chat.date)}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500 truncate">{chat.preview}</p>
-                </>
+                <button 
+                  onClick={(e) => deleteChat(chat.id, e)}
+                  className="absolute top-1 right-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity rounded p-1"
+                  title="Delete Chat"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               )}
             </div>
           ))
         )}
       </div>
+      
+      {/* Empty state treatment when no chats */}
+      {chats.length === 0 && !loading && (
+        <div className="absolute bottom-4 left-0 right-0 flex justify-center">
+          <AlertCircle className="w-6 h-6 text-gray-400" />
+        </div>
+      )}
     </div>
   );
 }

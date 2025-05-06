@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 
-// This component creates a typing animation effect
+// This component creates a typing animation effect with proper markdown rendering
 export default function TypingEffect({ text, speed = 2, onComplete }) {
   const [displayedText, setDisplayedText] = useState("");
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -37,8 +37,15 @@ export default function TypingEffect({ text, speed = 2, onComplete }) {
   }, [currentIndex, text, speed, isComplete, onComplete]);
 
   return (
-    <div className="typing-animation">
-      <ReactMarkdown>{displayedText}</ReactMarkdown>
+    <div className="typing-animation baymax-response">
+      <ReactMarkdown components={{
+        // Customize ReactMarkdown rendering for lists
+        ul: ({node, ...props}) => <ul className="baymax-list" {...props} />,
+        ol: ({node, ...props}) => <ol className="baymax-ordered-list" {...props} />,
+        li: ({node, ...props}) => <li className="baymax-list-item" {...props} />
+      }}>
+        {displayedText}
+      </ReactMarkdown>
       {currentIndex < text.length && (
         <span className="inline-block typing-cursor animate-pulse">|</span>
       )}
