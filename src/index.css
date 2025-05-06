@@ -1,1 +1,63 @@
 @import "tailwindcss";
+
+/* Add this to your global CSS or create a specific file for it */
+
+.typing-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    margin-left: 1px;
+    vertical-align: middle;
+    position: relative;
+    top: -1px;
+  }
+  
+  @keyframes pulse {
+    0% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+  
+  .animate-pulse {
+    animation: pulse 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  .typing-animation p {
+    margin-bottom: 0.5rem;
+    display: inline;
+  }
+  
+  .typing-animation p:last-child {
+    margin-bottom: 0;
+  }
+  
+  .typing-animation {
+    display: inline;
+  }
+  
+  /* Markdown list styles */
+  .typing-animation ul {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+    padding-left: 1.5rem;
+    list-style-type: disc;
+  }
+  
+  .typing-animation li {
+    margin-bottom: 0.25rem;
+    display: list-item;
+  }
+  
+  /* Add a dash for lists that are being typed */
+  .typing-animation li::before {
+    content: "- ";
+    display: inline-block;
+    width: 1em;
+    margin-left: -1em;
+  }
