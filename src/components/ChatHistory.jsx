@@ -205,8 +205,7 @@ export default function ChatHistory({ onSelectChat, activeChat, currentMessages,
       // Reset delete confirmation
       setDeleteConfirm(null);
     } catch (error) {
-      console.error("Error deleting chat:", error);
-      alert("Failed to delete chat");
+      
     }
   };
 
