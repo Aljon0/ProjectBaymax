@@ -3,22 +3,25 @@ import { XCircle, LogOut } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 
-// This component would replace the current logout button in your Header component
 export default function SignOutAlert() {
   const [showAlert, setShowAlert] = useState(false);
-  
   const { logout } = useAuth();
-const navigate = useNavigate();
+  const navigate = useNavigate();
 
-const handleLogout = async () => {
-  try {
-    await logout();
-    setShowAlert(false);
-    navigate("/login");
-  } catch (error) {
-    console.error("Failed to log out", error);
-  }
-};
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setShowAlert(false);
+      navigate("/login");
+    } catch (error) {
+      console.error("Failed to log out", error);
+    }
+  };
+
+  const handleAlertClick = (e) => {
+    // Prevent clicks inside the alert from closing it
+    e.stopPropagation();
+  };
 
   return (
     <>
@@ -33,8 +36,11 @@ const handleLogout = async () => {
 
       {/* Alert Overlay */}
       {showAlert && (
-        <div className="fixed inset-0 backdrop-blur-xs bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden animate-fade-in">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div 
+            className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden"
+            onClick={handleAlertClick}
+          >
             {/* Alert Header */}
             <div className="bg-red-500 p-4 flex justify-between items-center">
               <div className="flex items-center gap-2">

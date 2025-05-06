@@ -1,8 +1,7 @@
 import SignOutAlert from "./SignOutAlert";
-import { Heart, Bell, Calendar, MessageSquare, AlertTriangle, User, LogOut, Menu, X } from "lucide-react";
+import { Heart, Bell, Calendar, MessageSquare, AlertTriangle, User, Menu, X } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
 import NavButton from "./NavButton";
 import MobileNavButton from "./MobileNavButton";
 
@@ -10,8 +9,8 @@ export default function Header({ activeTab, handleTabChange }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef(null);
-  const { currentUser, logout } = useAuth();
-  const navigate = useNavigate();
+  const mobileProfileRef = useRef(null);
+  const { currentUser } = useAuth();
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -26,7 +25,10 @@ export default function Header({ activeTab, handleTabChange }) {
   // Close profile menu when clicking outside
   useEffect(() => {
     function handleClickOutside(event) {
-      if (profileRef.current && !profileRef.current.contains(event.target)) {
+      if (
+        (profileRef.current && !profileRef.current.contains(event.target)) &&
+        (mobileProfileRef.current && !mobileProfileRef.current.contains(event.target))
+      ) {
         setIsProfileOpen(false);
       }
     }
@@ -36,16 +38,6 @@ export default function Header({ activeTab, handleTabChange }) {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-      setIsProfileOpen(false);
-      navigate("/login");
-    } catch (error) {
-      console.error("Failed to log out", error);
-    }
-  };
 
   return (
     <>
@@ -144,7 +136,7 @@ export default function Header({ activeTab, handleTabChange }) {
 
       {/* Mobile Profile Dropdown */}
       {isProfileOpen && currentUser && (
-        <div className="md:hidden absolute top-16 right-2 mt-2 w-48 bg-white rounded-lg shadow-lg py-1 z-30">
+        <div className="md:hidden absolute top-16 right-2 mt-2 w-48 bg-white rounded-lg shadow-lg py-1 z-30" ref={mobileProfileRef}>
           <div className="px-4 py-3 border-b border-gray-100">
             <p className="text-sm font-medium text-gray-900">
               {currentUser.displayName || "User"}

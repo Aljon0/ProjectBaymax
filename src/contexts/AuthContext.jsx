@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { 
-  getAuth, 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   signOut, 
@@ -10,6 +9,7 @@ import {
   GoogleAuthProvider,
   signInAnonymously as firebaseSignInAnonymously 
 } from 'firebase/auth';
+import { getauth } from '../firebase';
 
 const AuthContext = createContext();
 
@@ -20,9 +20,9 @@ export function useAuth() {
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const auth = getAuth();
+  const auth = getauth;
 
-  function register(email, password, name) {
+  async function register(email, password, name) {
     return createUserWithEmailAndPassword(auth, email, password)
       .then((userCredential) => {
         // Update profile with the user's name
