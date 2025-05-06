@@ -9,7 +9,7 @@ import {
   GoogleAuthProvider,
   signInAnonymously as firebaseSignInAnonymously 
 } from 'firebase/auth';
-import { getauth } from '../firebase';
+import { getAuth } from '../firebase';
 
 const AuthContext = createContext();
 
@@ -20,7 +20,7 @@ export function useAuth() {
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const auth = getauth;
+  const auth = getAuth();
 
   async function register(email, password, name) {
     return createUserWithEmailAndPassword(auth, email, password)

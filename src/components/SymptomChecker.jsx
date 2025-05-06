@@ -1,10 +1,18 @@
 import { useState, useEffect } from "react";
-import ReactMarkdown from "react-markdown";
 import BaymaxAvatar from "./BaymaxAvatar";
 import MessageBubble from "./MessageBubble";
 import ChatHistory from "./ChatHistory";
 import axios from "axios";
 import TypingEffect from "./TypingEffect";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { db } from "../firebase";
+import { 
+  doc, 
+  getDoc, 
+  updateDoc, 
+  serverTimestamp 
+} from "firebase/firestore";
 
 // Set the base URL for API requests
 const API_BASE_URL = "http://localhost:5000"; // Adjust this to your backend server address
@@ -21,6 +29,19 @@ export default function SymptomChecker() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [activeChat, setActiveChat] = useState(null);
+  const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [user, setUser] = useState(null);
+
+  // Check authentication state when component mounts
+  useEffect(() => {
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+    });
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, []);
 
   // Function to analyze symptoms using our backend
   const analyzeSymptoms = async (symptoms) => {
@@ -200,61 +221,11 @@ export default function SymptomChecker() {
   const handleSelectChat = (chat) => {
     setActiveChat(chat);
     
-    // For demo purposes, we'll simulate loading previous chat messages
-    if (chat.id === 1) {
-      setMessages([
-        {
-          sender: "baymax",
-          text: "Hello, I am Baymax, your personal healthcare companion. Please describe your symptoms, and I will try to help.",
-          isTyping: false,
-        },
-        {
-          sender: "user",
-          text: "I have been coughing for a week and spitting phlegm.",
-        },
-        {
-          sender: "baymax",
-          text: "Hello! I'm here to help you with your health concerns. I'm sorry to hear that you've been coughing for a week and spitting phlegm. Let's see how we can make you feel better.\nBased on the information you've provided, your symptoms could be related to several mild conditions such as:\nCommon cold\nBronchitis\nAsthma",
-          isTyping: false,
-        }
-      ]);
-    } else if (chat.id === 2) {
-      setMessages([
-        {
-          sender: "baymax",
-          text: "Hello, I am Baymax, your personal healthcare companion. Please describe your symptoms, and I will try to help.",
-          isTyping: false,
-        },
-        {
-          sender: "user",
-          text: "I've had a persistent headache for the past 3 days.",
-        },
-        {
-          sender: "baymax",
-          text: "I understand you've been experiencing a persistent headache for the past 3 days. This must be uncomfortable for you. Persistent headaches can have various causes, including tension, dehydration, lack of sleep, or stress. Have you noticed any triggers or patterns with your headache? Also, are you experiencing any other symptoms alongside the headache, such as sensitivity to light or sound?",
-          isTyping: false,
-        }
-      ]);
-    } else if (chat.id === 3 || chat.id === 4) {
-      // For other existing chats, load appropriate conversation
-      setMessages([
-        {
-          sender: "baymax",
-          text: "Hello, I am Baymax, your personal healthcare companion. Please describe your symptoms, and I will try to help.",
-          isTyping: false,
-        },
-        {
-          sender: "user",
-          text: chat.preview,
-        },
-        {
-          sender: "baymax",
-          text: "I'm here to help you with your health concerns. Could you please provide more details about your symptoms so I can better assist you?",
-          isTyping: false,
-        }
-      ]);
+    // If the chat contains messages, load them
+    if (chat.messages && chat.messages.length > 0) {
+      setMessages(chat.messages);
     } else {
-      // For new chats, reset to initial message
+      // Default initial message if no messages in chat
       setMessages([
         {
           sender: "baymax",
@@ -273,84 +244,126 @@ export default function SymptomChecker() {
     }
   }, [messages]);
 
+  const toggleSidebar = () => {
+    setSidebarVisible(!sidebarVisible);
+  };
+
   return (
-    <div className="max-w-6xl mx-auto mt-6 flex gap-0">
-      {/* Chat history sidebar */}
-      <div className="md:block">
-        <ChatHistory onSelectChat={handleSelectChat} activeChat={activeChat} />
-      </div>
-      
-      {/* Main chat interface */}
-      <div className="flex-1">
-        <div className="flex items-center justify-center mb-8">
-          <BaymaxAvatar mood={isLoading ? "thinking" : "neutral"} />
-        </div>
-
-        <div className="bg-gray-100 rounded-xl p-6 mb-6">
-          <h2 className="text-2xl font-bold mb-6 text-center">Symptom Checker</h2>
-
-          {errorMessage && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-              {errorMessage}
-            </div>
-          )}
-
-          <div 
-            id="message-container"
-            className="space-y-4 mb-6 overflow-y-auto max-h-96 p-2"
+    <div className="w-full max-w-7xl mx-auto mt-6 px-4">
+      {/* Responsive layout with conditional sidebar */}
+      <div className="flex flex-col md:flex-row gap-6">
+        {/* Mobile menu toggle */}
+        <div className="md:hidden mb-4">
+          <button 
+            onClick={toggleSidebar}
+            className="bg-red-500 hover:bg-red-600 text-white rounded-lg px-4 py-2 flex items-center"
           >
-            {messages.map((message, index) => (
-              <MessageBubble key={index} sender={message.sender}>
-                {message.sender === "baymax" && message.isTyping ? (
-                  <div className="flex items-center">
-                    <div className="animate-pulse mr-2">⚕️</div>
-                    <TypingEffect 
-                      text={message.text} 
-                      speed={2} 
-                      onComplete={() => handleTypingComplete(index)}
-                    />
-                  </div>
-                ) : (
-                  <ReactMarkdown>{message.text}</ReactMarkdown>
-                )}
-              </MessageBubble>
-            ))}
+            {sidebarVisible ? 
+              <><ChevronLeft className="w-4 h-4 mr-2" /> Hide Chat History</> : 
+              <><ChevronRight className="w-4 h-4 mr-2" /> Show Chat History</>
+            }
+          </button>
+        </div>
+        
+        {/* Chat history sidebar - visible based on state on mobile */}
+        <div className={`${sidebarVisible ? 'block' : 'hidden'} md:block md:w-72 flex-shrink-0 mb-6 md:mb-0`}>
+          <ChatHistory 
+            onSelectChat={handleSelectChat} 
+            activeChat={activeChat} 
+            currentMessages={messages}
+          />
+        </div>
+        
+        {/* Main chat interface - takes remaining space */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-center mb-8">
+            <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-md">
+              <div className="w-16 h-8 bg-black rounded-full flex items-center justify-around">
+                <div className="w-3 h-3 bg-white rounded-full"></div>
+                <div className="w-3 h-3 bg-white rounded-full"></div>
+              </div>
+            </div>
           </div>
 
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={symptoms}
-              onChange={(e) => setSymptoms(e.target.value)}
-              placeholder="Describe your symptoms..."
-              className="flex-1 p-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  handleSubmit();
-                }
-              }}
-              disabled={isLoading}
-            />
-            <button
-              onClick={handleSubmit}
-              className={`${
-                isLoading 
-                  ? "bg-gray-400" 
-                  : "bg-red-500 hover:bg-red-600"
-              } text-white px-6 py-3 rounded-lg transition-colors`}
-              disabled={isLoading}
+          <div className="bg-gray-100 rounded-xl p-4 md:p-6 mb-6">
+            <h2 className="text-xl md:text-2xl font-bold mb-4 md:mb-6 text-center">Symptom Checker</h2>
+
+            {!user && (
+              <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4 text-center">
+                Please sign in to save your consultations
+              </div>
+            )}
+
+            {errorMessage && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                {errorMessage}
+              </div>
+            )}
+
+            <div 
+              id="message-container"
+              className="space-y-4 mb-4 md:mb-6 overflow-y-auto max-h-64 md:max-h-96 p-2"
             >
-              {isLoading ? "Processing..." : "Send"}
-            </button>
-          </div>
-          
-          {/* Additional information */}
-          <div className="mt-4 text-xs text-gray-500 text-center">
-            <p>
-              This app uses MedlinePlus and NLM data for health information.
-              <br />
-              Always consult with a healthcare professional for medical advice.
-            </p>
+              {messages.map((message, index) => (
+                <div 
+                  key={index} 
+                  className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div 
+                    className={`max-w-full md:max-w-3/4 p-3 rounded-lg ${
+                      message.sender === "user" 
+                        ? "bg-red-500 text-white" 
+                        : "bg-white border border-gray-200"
+                    }`}
+                  >
+                    {message.isTyping ? (
+                      <div className="flex items-center">
+                        <div className="animate-pulse mr-2">⚕️</div>
+                        <span>{message.text}</span>
+                      </div>
+                    ) : (
+                      <div>{message.text}</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={symptoms}
+                onChange={(e) => setSymptoms(e.target.value)}
+                placeholder="Describe your symptoms..."
+                className="flex-1 p-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleSubmit();
+                  }
+                }}
+                disabled={isLoading}
+              />
+              <button
+                onClick={handleSubmit}
+                className={`${
+                  isLoading 
+                    ? "bg-gray-400" 
+                    : "bg-red-500 hover:bg-red-600"
+                } text-white px-6 py-3 rounded-lg transition-colors mt-2 sm:mt-0`}
+                disabled={isLoading}
+              >
+                {isLoading ? "Processing..." : "Send"}
+              </button>
+            </div>
+            
+            {/* Additional information */}
+            <div className="mt-4 text-xs text-gray-500 text-center">
+              <p>
+                This app uses MedlinePlus and NLM data for health information.
+                <br />
+                Always consult with a healthcare professional for medical advice.
+              </p>
+            </div>
           </div>
         </div>
       </div>
