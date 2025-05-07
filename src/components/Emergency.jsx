@@ -1,4 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { 
+  doc, 
+  getDoc, 
+  setDoc, 
+  updateDoc, 
+  Timestamp,
+  arrayUnion // Added missing import
+} from "firebase/firestore";
+import { auth, db } from "../firebase"; // Adjust path as needed
+import { onAuthStateChanged } from "firebase/auth";
 import BaymaxAvatar from "./BaymaxAvatar";
 
 export default function Emergency() {
@@ -8,21 +18,138 @@ export default function Emergency() {
   const [allergies, setAllergies] = useState("");
   const [medications, setMedications] = useState("");
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
-  };
+  // Listen for auth state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        fetchUserEmergencyData(currentUser.uid);
+      } else {
+        setLoading(false);
+      }
+    });
 
-  const handleContactEmergency = () => {
-    if (contactPhone) {
-      alert(
-        `In a real application, this would send a message to ${contactName} at ${contactPhone}`
-      );
-    } else {
-      alert("Please add an emergency contact first.");
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch user's emergency information from Firestore
+  const fetchUserEmergencyData = async (userId) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const emergencyRef = doc(db, "users", userId, "emergency", "info");
+      const emergencyDoc = await getDoc(emergencyRef);
+      
+      if (emergencyDoc.exists()) {
+        const data = emergencyDoc.data();
+        setContactName(data.contactName || "");
+        setContactPhone(data.contactPhone || "");
+        setBloodType(data.bloodType || "");
+        setAllergies(data.allergies || "");
+        setMedications(data.medications || "");
+      }
+    } catch (error) {
+      console.error("Error fetching emergency data:", error);
+      setError("Failed to load your emergency information. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
+
+  // Save emergency information to Firestore
+  const handleSave = async () => {
+    if (!user) {
+      alert("Please sign in to save your emergency information.");
+      return;
+    }
+    
+    setSaving(true);
+    setError(null);
+    
+    try {
+      const emergencyRef = doc(db, "users", user.uid, "emergency", "info");
+      
+      // Prepare data object
+      const emergencyData = {
+        contactName,
+        contactPhone,
+        bloodType,
+        allergies,
+        medications,
+        lastUpdated: Timestamp.now()
+      };
+      
+      // Save to Firestore
+      await setDoc(emergencyRef, emergencyData, { merge: true });
+      
+      // Show success message
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (error) {
+      console.error("Error saving emergency info:", error);
+      setError("Failed to save your information. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Handle emergency contact functionality
+  const handleContactEmergency = () => {
+    if (!contactPhone) {
+      alert("Please add an emergency contact first.");
+      return;
+    }
+    
+    // In a real app, this would integrate with SMS/calling API
+    // For demonstration, we'll just show an alert
+    alert(`In a real application, this would send a message to ${contactName} at ${contactPhone}`);
+    
+    // In a real implementation, you could also log this emergency contact attempt
+    if (user) {
+      try {
+        const emergencyLogRef = doc(db, "users", user.uid, "emergency", "logs");
+        updateDoc(emergencyLogRef, {
+          contactAttempts: arrayUnion({
+            timestamp: Timestamp.now(),
+            contactName,
+            contactPhone
+          })
+        }).catch(error => {
+          // If document doesn't exist yet, create it
+          if (error.code === "not-found") {
+            setDoc(emergencyLogRef, {
+              contactAttempts: [{
+                timestamp: Timestamp.now(),
+                contactName,
+                contactPhone
+              }]
+            });
+          }
+        });
+      } catch (error) {
+        console.error("Error logging emergency contact attempt:", error);
+      }
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto mt-6 flex justify-center items-center h-64">
+        <div className="text-center">
+          <div className="spinner-border text-red-500" role="status">
+            <span className="sr-only">Loading...</span>
+          </div>
+          <p className="mt-2">Loading emergency information...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto mt-6">
@@ -35,6 +162,14 @@ export default function Emergency() {
           Emergency Information
         </h2>
 
+        {!user && (
+          <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg mb-8">
+            <p className="text-yellow-700">
+              Sign in to save your emergency information securely.
+            </p>
+          </div>
+        )}
+
         <div className="bg-red-50 border border-red-200 p-4 rounded-lg mb-8">
           <h3 className="text-red-600 font-bold text-lg mb-2">
             Important Notice
@@ -45,6 +180,12 @@ export default function Emergency() {
             emergency number immediately.
           </p>
         </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-300 text-red-700 p-3 rounded mb-4">
+            {error}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div>
@@ -75,7 +216,8 @@ export default function Emergency() {
               <button
                 type="button"
                 onClick={handleContactEmergency}
-                className="w-full bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 transition-colors"
+                disabled={!contactPhone}
+                className={`w-full ${!contactPhone ? 'bg-gray-400' : 'bg-red-600 hover:bg-red-700'} text-white py-3 rounded-lg transition-colors`}
               >
                 Contact Emergency Person
               </button>
@@ -128,9 +270,10 @@ export default function Emergency() {
 
               <button
                 onClick={handleSave}
-                className="w-full bg-red-500 text-white py-3 rounded-lg hover:bg-red-600 transition-colors"
+                disabled={saving || !user}
+                className={`w-full ${saving || !user ? 'bg-gray-400' : saved ? 'bg-green-500' : 'bg-red-500 hover:bg-red-600'} text-white py-3 rounded-lg transition-colors`}
               >
-                {saved ? "Information Saved!" : "Save Medical Information"}
+                {saving ? "Saving..." : saved ? "Information Saved!" : "Save Medical Information"}
               </button>
             </div>
           </div>
