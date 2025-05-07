@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { PlusCircle, Clock, Calendar, Trash2, AlertCircle } from "lucide-react";
-import { db } from "../firebase"; // Import your Firebase db
+import { db } from "../firebase";
 import { 
   collection, 
   query, 
@@ -15,8 +15,16 @@ import {
 import { getAuth } from "firebase/auth";
 import voiceline from "../assets/BaymaxVoice.wav";
 
-// Chat History Component with Firebase integration
-export default function ChatHistory({ onSelectChat, activeChat, currentMessages, isMobileView, setShowChatHistory }) {
+export default function ChatHistory({ 
+  onSelectChat, 
+  activeChat, 
+  currentMessages, 
+  isMobileView, 
+  setShowChatHistory,
+  onCreateNewChat,
+  chatList,
+  setChatList
+}) {
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -27,64 +35,69 @@ export default function ChatHistory({ onSelectChat, activeChat, currentMessages,
     audio.play();
   };
 
-  // Fetch chat history from Firestore when component mounts
+  // Sync with parent's chatList prop
   useEffect(() => {
-    const fetchChatHistory = async () => {
-      try {
-        const userId = auth.currentUser?.uid;
-        
-        if (!userId) {
-          setLoading(false);
-          return; // Exit if no user is logged in
-        }
-        
-        const chatsRef = collection(db, "users", userId, "chats");
-        const q = query(chatsRef, orderBy("createdAt", "desc"));
-        
-        const querySnapshot = await getDocs(q);
-        const chatList = [];
-        
-        querySnapshot.forEach((doc) => {
-          const chatData = doc.data();
-          chatList.push({
-            id: doc.id,
-            title: chatData.title,
-            date: chatData.createdAt?.toDate().toLocaleDateString('en-US', { 
-              month: 'short', 
-              day: 'numeric', 
-              year: 'numeric' 
-            }) || new Date().toLocaleDateString('en-US', { 
-              month: 'short', 
-              day: 'numeric', 
-              year: 'numeric' 
-            }),
-            preview: chatData.preview || "No preview available",
-            messages: chatData.messages || []
-          });
-        });
-        
-        setChats(chatList);
-        setLoading(false);
-      } catch (error) {
-        console.error("Error fetching chat history:", error);
-        setLoading(false);
-      }
-    };
+    if (chatList && chatList.length > 0) {
+      setChats(chatList);
+      setLoading(false);
+    } else {
+      fetchChatHistory();
+    }
+  }, [chatList]);
 
-    fetchChatHistory();
-  }, [auth.currentUser]);
+  // Fetch chat history from Firestore when component mounts
+  const fetchChatHistory = async () => {
+    try {
+      const userId = auth.currentUser?.uid;
+      
+      if (!userId) {
+        setLoading(false);
+        return;
+      }
+      
+      const chatsRef = collection(db, "users", userId, "chats");
+      const q = query(chatsRef, orderBy("createdAt", "desc"));
+      
+      const querySnapshot = await getDocs(q);
+      const chatList = [];
+      
+      querySnapshot.forEach((doc) => {
+        const chatData = doc.data();
+        chatList.push({
+          id: doc.id,
+          title: chatData.title,
+          date: chatData.createdAt?.toDate().toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric', 
+            year: 'numeric' 
+          }) || new Date().toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric', 
+            year: 'numeric' 
+          }),
+          preview: chatData.preview || "No preview available",
+          messages: chatData.messages || []
+        });
+      });
+      
+      setChats(chatList);
+      if (setChatList) setChatList(chatList);
+      setLoading(false);
+    } catch (error) {
+      console.error("Error fetching chat history:", error);
+      setLoading(false);
+    }
+  };
 
   // Watch for changes in currentMessages to update active chat
   useEffect(() => {
     const updateActiveChat = async () => {
-      // If there's no active chat or no messages, return
       if (!activeChat || !currentMessages || currentMessages.length === 0) return;
       
       try {
         const userId = auth.currentUser?.uid;
         if (!userId) return;
         
-        // Generate preview from the latest user message
         const userMessages = currentMessages.filter(msg => msg.sender === "user");
         const latestUserMessage = userMessages.length > 0 
           ? userMessages[userMessages.length - 1].text 
@@ -99,27 +112,39 @@ export default function ChatHistory({ onSelectChat, activeChat, currentMessages,
         });
         
         // Update local state
-        setChats(prevChats => 
-          prevChats.map(chat => 
-            chat.id === activeChat.id 
-              ? {
-                  ...chat,
-                  preview: latestUserMessage || chat.preview,
-                  messages: currentMessages,
-                  date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                }
-              : chat
-          )
+        const updatedChats = chats.map(chat => 
+          chat.id === activeChat.id 
+            ? {
+                ...chat,
+                preview: latestUserMessage || chat.preview,
+                messages: currentMessages,
+                date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+              }
+            : chat
         );
+        
+        setChats(updatedChats);
+        if (setChatList) setChatList(updatedChats);
       } catch (error) {
         console.error("Error updating chat:", error);
       }
     };
     
     updateActiveChat();
-  }, [currentMessages, activeChat, auth.currentUser]);
+  }, [currentMessages, activeChat]);
 
   const createNewChat = async () => {
+    if (onCreateNewChat) {
+      const newChat = await onCreateNewChat();
+      if (newChat) {
+        // Update local state if not handled by parent
+        if (!setChatList) {
+          setChats([newChat, ...chats]);
+        }
+        return;
+      }
+    }
+
     try {
       const userId = auth.currentUser?.uid;
       
@@ -128,14 +153,13 @@ export default function ChatHistory({ onSelectChat, activeChat, currentMessages,
         return;
       }
       playAudio();
-      // Initial message from Baymax
+      
       const initialMessages = [{
         sender: "baymax",
         text: "Hello, I am Baymax, your personal healthcare companion. Please describe your symptoms, and I will try to help.",
         isTyping: false,
       }];
       
-      // Create a new chat document in Firestore
       const chatsRef = collection(db, "users", userId, "chats");
       const newChatDoc = await addDoc(chatsRef, {
         title: "New consultation",
@@ -145,7 +169,6 @@ export default function ChatHistory({ onSelectChat, activeChat, currentMessages,
         messages: initialMessages
       });
       
-      // Create the new chat object with the Firestore document ID
       const newChat = {
         id: newChatDoc.id,
         title: "New consultation",
@@ -154,13 +177,12 @@ export default function ChatHistory({ onSelectChat, activeChat, currentMessages,
         messages: initialMessages
       };
       
-      // Update state
-      setChats([newChat, ...chats]);
+      const updatedChats = [newChat, ...chats];
+      setChats(updatedChats);
+      if (setChatList) setChatList(updatedChats);
       
-      // Select the new chat
       onSelectChat(newChat);
       
-      // On mobile, automatically hide chat history after selecting a new chat
       if (isMobileView && setShowChatHistory) {
         setShowChatHistory(false);
       }
@@ -171,10 +193,8 @@ export default function ChatHistory({ onSelectChat, activeChat, currentMessages,
   };
 
   const deleteChat = async (chatId, e) => {
-    // Prevent the click from propagating to the parent (which would select the chat)
     e.stopPropagation();
     
-    // If we're just initiating the deletion confirmation
     if (deleteConfirm !== chatId) {
       setDeleteConfirm(chatId);
       return;
@@ -188,28 +208,24 @@ export default function ChatHistory({ onSelectChat, activeChat, currentMessages,
         return;
       }
       
-      // Delete the chat document from Firestore
       const chatRef = doc(db, "users", userId, "chats", chatId);
       await deleteDoc(chatRef);
       
-      // Update state
-      setChats(prevChats => prevChats.filter(chat => chat.id !== chatId));
+      const updatedChats = chats.filter(chat => chat.id !== chatId);
+      setChats(updatedChats);
+      if (setChatList) setChatList(updatedChats);
       
-      // If the deleted chat was active, select a new one or clear
       if (activeChat && activeChat.id === chatId) {
-        // Select the first chat in the updated list, or null if list is empty
-        const firstChat = chats.filter(chat => chat.id !== chatId)[0];
+        const firstChat = updatedChats[0];
         onSelectChat(firstChat || null);
       }
       
-      // Reset delete confirmation
       setDeleteConfirm(null);
     } catch (error) {
-      
+      console.error("Error deleting chat:", error);
     }
   };
 
-  // Cancel delete confirmation
   const cancelDelete = (e) => {
     e.stopPropagation();
     setDeleteConfirm(null);
@@ -222,7 +238,6 @@ export default function ChatHistory({ onSelectChat, activeChat, currentMessages,
 
   const handleSelectChat = (chat) => {
     onSelectChat(chat);
-    // Hide chat history on mobile after selecting a chat
     if (isMobileView && setShowChatHistory) {
       setShowChatHistory(false);
     }
@@ -230,7 +245,6 @@ export default function ChatHistory({ onSelectChat, activeChat, currentMessages,
 
   return (
     <div className="bg-white rounded-xl shadow-md h-[calc(100vh-180px)] flex flex-col w-full relative">
-      {/* Header with title */}
       <div className="flex items-center justify-between p-4">
         <h2 className="text-xl font-bold text-red-500">Chat History</h2>
       </div>
@@ -279,7 +293,6 @@ export default function ChatHistory({ onSelectChat, activeChat, currentMessages,
               </div>
               <p className="text-xs text-gray-500 truncate">{chat.preview}</p>
               
-              {/* Delete button with confirmation */}
               {deleteConfirm === chat.id ? (
                 <div className="absolute top-1 right-1 flex items-center">
                   <span className="text-xs mr-1 bg-red-50 text-red-600 p-1 rounded">Confirm?</span>
@@ -288,11 +301,11 @@ export default function ChatHistory({ onSelectChat, activeChat, currentMessages,
                     className="bg-red-500 hover:bg-red-600 text-white rounded p-1 mr-1"
                     title="Confirm Delete"
                   >
-                    <Trash2 className="w-3 h-3" />
+                    <Trash2 className="w-3 h-3 cursor-pointer" />
                   </button>
                   <button 
                     onClick={cancelDelete}
-                    className="bg-gray-300 hover:bg-gray-400 text-gray-700 rounded p-1"
+                    className="bg-gray-300 hover:bg-gray-400 text-gray-700 rounded p-1 cursor-pointer"
                     title="Cancel"
                   >
                     ✕
@@ -312,7 +325,6 @@ export default function ChatHistory({ onSelectChat, activeChat, currentMessages,
         )}
       </div>
       
-      {/* Empty state treatment when no chats */}
       {chats.length === 0 && !loading && (
         <div className="absolute bottom-4 left-0 right-0 flex justify-center">
           <AlertCircle className="w-6 h-6 text-gray-400" />

@@ -19,8 +19,7 @@ import {
 import { auth } from "../firebase";
 import voiceline from "../assets/BaymaxVoice.wav";
 
-// Set the base URL for API requests
-const API_BASE_URL = "http://localhost:5000"; // Adjust this to your backend server address
+const API_BASE_URL = "http://localhost:5000";
 
 export default function SymptomChecker() {
   const [symptoms, setSymptoms] = useState("");
@@ -39,14 +38,12 @@ export default function SymptomChecker() {
   const [showStartPrompt, setShowStartPrompt] = useState(true);
   const [chatList, setChatList] = useState([]);
 
-  // Check authentication state when component mounts
   useEffect(() => {
     const auth = getAuth();
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
     });
 
-    // Cleanup subscription on unmount
     return () => unsubscribe();
   }, []);
 
@@ -55,7 +52,6 @@ export default function SymptomChecker() {
     audio.play();
   };
 
-  // Function to analyze symptoms using our backend
   const analyzeSymptoms = async (symptoms) => {
     try {
       const response = await axios.post(`${API_BASE_URL}/api/symptoms`, { symptoms });
@@ -66,7 +62,6 @@ export default function SymptomChecker() {
     }
   };
 
-  // Function to query the Mistral AI model through our backend
   const queryMistralAI = async (userInput, medicalContext = "") => {
     try {
       const response = await axios.post(`${API_BASE_URL}/api/mistral`, {
@@ -81,7 +76,6 @@ export default function SymptomChecker() {
     }
   };
 
-  // Function to search MedlinePlus for information
   const searchMedlinePlus = async (query) => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/medlineplus?query=${encodeURIComponent(query)}`);
@@ -92,7 +86,6 @@ export default function SymptomChecker() {
     }
   };
 
-  // Function to search National Library of Medicine
   const searchNLM = async (query) => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/nlm?query=${encodeURIComponent(query)}`);
@@ -103,9 +96,7 @@ export default function SymptomChecker() {
     }
   };
 
-  // Helper function to extract potential drug terms from user input
   const extractDrugTerms = (input) => {
-    // This is a simplified version - in a real app, you might use NLP or a medical dictionary
     const commonDrugs = [
       "aspirin", "ibuprofen", "acetaminophen", "paracetamol", "tylenol",
       "advil", "motrin", "aleve", "naproxen", "benadryl", "zyrtec", "claritin",
@@ -117,21 +108,17 @@ export default function SymptomChecker() {
     return commonDrugs.filter(drug => words.includes(drug));
   };
 
-  // Main function to process user input and generate responses
   const processSymptoms = async (userSymptoms) => {
     setIsLoading(true);
     
     try {
-      // Step 1: Check symptoms with our backend symptom analyzer
       let symptomsAnalysis;
       try {
         symptomsAnalysis = await analyzeSymptoms(userSymptoms);
       } catch (error) {
         console.error("Symptom analysis failed, continuing with other methods:", error);
-        // If symptom analysis fails, we'll continue with other methods
       }
       
-      // Step 2: Search MedlinePlus for general information about the condition
       let medlinePlusData;
       try {
         medlinePlusData = await searchMedlinePlus(userSymptoms);
@@ -139,7 +126,6 @@ export default function SymptomChecker() {
         console.error("MedlinePlus search failed:", error);
       }
       
-      // Step 3: Get additional context from NLM (medical literature)
       let nlmData;
       try {
         nlmData = await searchNLM(userSymptoms);
@@ -147,7 +133,6 @@ export default function SymptomChecker() {
         console.error("NLM search failed:", error);
       }
       
-      // Step 4: Compile medical context for Mistral AI
       let medicalContext = "";
       
       if (symptomsAnalysis) {
@@ -162,7 +147,6 @@ export default function SymptomChecker() {
         medicalContext += `Medical literature: ${JSON.stringify(nlmData)}\n\n`;
       }
       
-      // Step 5: Generate response using Mistral AI with all the context
       const aiResponse = await queryMistralAI(
         `${userSymptoms}. Provide medical advice and information in a helpful, caring manner as Baymax.`, 
         medicalContext
@@ -177,7 +161,6 @@ export default function SymptomChecker() {
     }
   };
 
-  // Function to create a new chat and set it as active
   const createNewChat = async () => {
     try {
       const userId = auth.currentUser?.uid;
@@ -189,14 +172,12 @@ export default function SymptomChecker() {
       
       playAudio();
       
-      // Initial message from Baymax
       const initialMessages = [{
         sender: "baymax",
         text: "Hello, I am Baymax, your personal healthcare companion. Please describe your symptoms, and I will try to help.",
         isTyping: false,
       }];
       
-      // Create a new chat document in Firestore
       const chatsRef = collection(db, "users", userId, "chats");
       const newChatDoc = await addDoc(chatsRef, {
         title: "New consultation",
@@ -206,7 +187,6 @@ export default function SymptomChecker() {
         messages: initialMessages
       });
       
-      // Create the new chat object with the Firestore document ID
       const newChat = {
         id: newChatDoc.id,
         title: "New consultation",
@@ -218,7 +198,6 @@ export default function SymptomChecker() {
       // Update the chat list state
       setChatList(prevChats => [newChat, ...prevChats]);
       
-      // Set the new chat as active
       setActiveChat(newChat);
       setShowStartPrompt(false);
       setMessages(initialMessages);
@@ -234,25 +213,21 @@ export default function SymptomChecker() {
   const handleSubmit = async () => {
     if (!symptoms.trim() || isLoading) return;
 
-    // If no active chat exists, create one first
     if (!activeChat) {
       const newChat = await createNewChat();
-      if (!newChat) return; // If chat creation failed, exit
+      if (!newChat) return;
     }
 
-    // Add user message
     const userMessage = { sender: "user", text: symptoms };
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     
-    // Update the chat in Firestore
     if (activeChat) {
       try {
         const userId = auth.currentUser?.uid;
         if (userId) {
           const chatRef = doc(db, "users", userId, "chats", activeChat.id);
           
-          // Generate preview from the user message
           await updateDoc(chatRef, {
             messages: updatedMessages,
             preview: symptoms,
@@ -264,11 +239,9 @@ export default function SymptomChecker() {
       }
     }
     
-    // Show analyzing message with typing animation
     const analyzingMessages = [...updatedMessages, { sender: "baymax", text: "I'm analyzing your symptoms...", isTyping: false }];
     setMessages(analyzingMessages);
     
-    // Auto-scroll after adding the analyzing message
     setTimeout(() => {
       const messageContainer = document.getElementById("message-container");
       if (messageContainer) {
@@ -276,17 +249,14 @@ export default function SymptomChecker() {
       }
     }, 100);
     
-    // Process the symptoms
     const response = await processSymptoms(symptoms);
     
-    // Update messages to show the response with typing animation
     const finalMessages = analyzingMessages.filter(msg => msg.text !== "I'm analyzing your symptoms...");
     const responseMessage = { sender: "baymax", text: response, isTyping: true };
     const updatedMessagesWithResponse = [...finalMessages, responseMessage];
     
     setMessages(updatedMessagesWithResponse);
     
-    // Update the chat in Firestore with the final messages
     if (activeChat) {
       try {
         const userId = auth.currentUser?.uid;
@@ -302,7 +272,6 @@ export default function SymptomChecker() {
       }
     }
     
-    // Auto-scroll to the bottom after adding the new message
     setTimeout(() => {
       const messageContainer = document.getElementById("message-container");
       if (messageContainer) {
@@ -313,7 +282,6 @@ export default function SymptomChecker() {
     setSymptoms("");
   };
 
-  // Handle typing completion for each message
   const handleTypingComplete = (index) => {
     const updatedMessages = messages.map((msg, i) => 
       i === index ? { ...msg, isTyping: false } : msg
@@ -321,7 +289,6 @@ export default function SymptomChecker() {
     
     setMessages(updatedMessages);
     
-    // Update the chat in Firestore after typing is complete
     if (activeChat) {
       try {
         const userId = auth.currentUser?.uid;
@@ -338,16 +305,13 @@ export default function SymptomChecker() {
     }
   };
   
-  // Handle chat selection from chat history
   const handleSelectChat = (chat) => {
     setActiveChat(chat);
     setShowStartPrompt(false);
     
-    // If the chat contains messages, load them
     if (chat.messages && chat.messages.length > 0) {
       setMessages(chat.messages);
     } else {
-      // Default initial message if no messages in chat
       setMessages([
         {
           sender: "baymax",
@@ -358,7 +322,6 @@ export default function SymptomChecker() {
     }
   };
 
-  // Handle start button click
   const handleStartChat = async () => {
     const newChat = await createNewChat();
     if (newChat) {
@@ -366,7 +329,6 @@ export default function SymptomChecker() {
     }
   };
 
-  // Auto-scroll to the latest message
   useEffect(() => {
     const messageContainer = document.getElementById("message-container");
     if (messageContainer) {
@@ -378,7 +340,6 @@ export default function SymptomChecker() {
     setSidebarVisible(!sidebarVisible);
   };
 
-  // Function to render message content with or without ReactMarkdown
   const renderMessageContent = (message) => {
     if (message.sender === "baymax" && message.isTyping) {
       return (
@@ -389,11 +350,9 @@ export default function SymptomChecker() {
         />
       );
     } else if (message.sender === "baymax") {
-      // Use ReactMarkdown for non-typing Baymax messages
       return (
         <div className="baymax-response">
           <ReactMarkdown components={{
-            // Customize ReactMarkdown rendering for lists
             ul: ({node, ...props}) => <ul className="baymax-list" {...props} />,
             ol: ({node, ...props}) => <ol className="baymax-ordered-list" {...props} />,
             li: ({node, ...props}) => <li className="baymax-list-item" {...props} />
@@ -403,16 +362,13 @@ export default function SymptomChecker() {
         </div>
       );
     } else {
-      // Regular text for user messages
       return <div>{message.text}</div>;
     }
   };
 
   return (
     <div className="w-full max-w-7xl mx-auto mt-6 px-4">
-      {/* Responsive layout with conditional sidebar */}
       <div className="flex flex-col md:flex-row gap-6">
-        {/* Mobile menu toggle */}
         <div className="md:hidden mb-4">
           <button 
             onClick={toggleSidebar}
@@ -425,7 +381,6 @@ export default function SymptomChecker() {
           </button>
         </div>
         
-        {/* Chat history sidebar - visible based on state on mobile */}
         <div className={`${sidebarVisible ? 'block' : 'hidden'} md:block md:w-72 flex-shrink-0 mb-6 md:mb-0`}>
           <ChatHistory 
             onSelectChat={handleSelectChat} 
@@ -439,7 +394,6 @@ export default function SymptomChecker() {
           />
         </div>
         
-        {/* Main chat interface - takes remaining space */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-center mb-8">
             <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-md">
@@ -450,7 +404,6 @@ export default function SymptomChecker() {
             </div>
           </div>
 
-          {/* Start button prompt when no active chat */}
           {showStartPrompt && !activeChat ? (
             <div className="bg-gray-100 rounded-xl p-8 mb-6 text-center">
               <h2 className="text-2xl font-bold mb-6">Welcome to Baymax Health Assistant</h2>
@@ -535,7 +488,6 @@ export default function SymptomChecker() {
                 </button>
               </div>
               
-              {/* Additional information */}
               <div className="mt-4 text-xs text-gray-500 text-center">
                 <p>
                   This app uses MedlinePlus and NLM data for health information.
