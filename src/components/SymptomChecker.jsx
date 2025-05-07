@@ -19,7 +19,7 @@ import {
 import { auth } from "../firebase";
 import voiceline from "../assets/BaymaxVoice.wav";
 
-const API_BASE_URL = "http://localhost:5000";
+const API_BASE_URL = "https://pb-api-phle.onrender.com";
 
 export default function SymptomChecker() {
   const [symptoms, setSymptoms] = useState("");
